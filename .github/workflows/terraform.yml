@@ -58,7 +58,7 @@ jobs:
     name: 'Terraform Apply'
     needs: terraform_plan
     runs-on: ubuntu-latest
-    if: env.DESTROY_FLAG == 'false' && env.CHANGE_FOUND == 'true'
+    if: $(DESTROY_FLAG) == 'false' && $(CHANGE_FOUND) == 'true'
 
     steps:
       - name: Checkout
@@ -74,7 +74,7 @@ jobs:
     name: 'Terraform Destroy'
     needs: terraform_plan
     runs-on: ubuntu-latest
-    if: env.DESTROY_FLAG == 'true'
+    if: $(DESTROY_FLAG) == 'true'
 
     steps:
       - name: Checkout
