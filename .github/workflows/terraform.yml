@@ -1,0 +1,79 @@
+name: Terraform
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  TF_WORKING_DIR: '.'
+  DESTROY_FLAG: 'false'
+  CHANGE_FOUND: 'false'
+
+jobs:
+  terraform_plan:
+    name: 'Terraform Plan'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: |
+          if [ "${{ env.DESTROY_FLAG }}" = "true" ]
+          then
+            terraform plan -destroy -out=tfplan
+          else
+            terraform plan -out=tfplan
+          fi
+          echo ::set-output name=stdout::$(terraform show -json tfplan | jq .values.root_module.resources[].change.actions[])
+
+      - name: Check for Changes
+        run: |
+          if echo "${{ steps.plan.outputs.stdout }}" | grep -q "update\|create\|delete"
+          then
+            echo "CHANGE_FOUND=true" >> $GITHUB_ENV
+          fi
+
+  terraform_apply:
+    name: 'Terraform Apply'
+    needs: terraform_plan
+    runs-on: ubuntu-latest
+    if: env.DESTROY_FLAG == 'false' && env.CHANGE_FOUND == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve tfplan
+
+  terraform_destroy:
+    name: 'Terraform Destroy'
+    needs: terraform_plan
+    runs-on: ubuntu-latest
+    if: env.DESTROY_FLAG == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve

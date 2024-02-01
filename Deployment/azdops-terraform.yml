@@ -1,0 +1,64 @@
+trigger:
+- master
+
+variables:
+  terraformWorkingDirectory: '$(System.DefaultWorkingDirectory)/main.tf'
+  destroyFlag: false
+  changeFound: false
+
+stages:
+- stage: TerraformInitAndValidate
+  jobs:
+  - job: RunTerraformInitAndValidate
+    steps:
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+      inputs:
+        workingDirectory: $(terraformWorkingDirectory)
+        command: init
+
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+      inputs:
+        workingDirectory: $(terraformWorkingDirectory)
+        command: validate
+
+- stage: TerraformPlan
+  jobs:
+  - job: RunTerraformPlan
+    steps:
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+      inputs:
+        workingDirectory: $(terraformWorkingDirectory)
+        command: plan
+        commandOptions: '-out=tfplan'
+        environmentServiceName: 'your-service-connection'
+
+    - powershell: |
+        $plan = terraform show -json tfplan
+        if ($plan.change.actions -contains 'update' -or $plan.change.actions -contains 'create' -or $plan.change.actions -contains 'delete') {
+          Write-Host "##vso[task.setvariable variable=changeFound;isOutput=true]true"
+        }
+      name: setvarStep
+
+- stage: TerraformApply
+  condition: and(succeeded(), eq(variables['destroyFlag'], false), eq(variables['changeFound'], true))
+  jobs:
+  - job: RunTerraformApply
+    steps:
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+      inputs:
+        workingDirectory: $(terraformWorkingDirectory)
+        command: apply
+        commandOptions: '-auto-approve tfplan'
+        environmentServiceName: 'your-service-connection'
+
+- stage: TerraformDestroy
+  condition: and(succeeded(), eq(variables['destroyFlag'], true))
+  jobs:
+  - job: RunTerraformDestroy
+    steps:
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV1@0
+      inputs:
+        workingDirectory: $(terraformWorkingDirectory)
+        command: destroy
+        commandOptions: '-auto-approve'
+        environmentServiceName: 'your-service-connection'
