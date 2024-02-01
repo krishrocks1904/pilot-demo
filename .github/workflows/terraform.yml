@@ -1,9 +1,17 @@
 name: Terraform
 
 on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+    paths:
+      - "!**/readme.md"
   push:
     branches:
-      - master
+      - main
 
 env:
   TF_WORKING_DIR: '.'
